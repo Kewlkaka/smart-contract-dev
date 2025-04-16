@@ -1,0 +1,244 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.26;
+
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract ReyPractice is ERC20, Ownable{
+    uint256 public feePercentage;
+    address public beneficiary;
+
+    event FeeUpdated(uint256 newFee);
+    event BeneficiaryUpdated(address newBeneficiary);
+
+    constructor(address recipient, uint256 initialSupply) ERC20 ("ReyPrac", "RTK") Ownable (recipient) {
+        uint256 supply = initialSupply * 10 ** decimals();
+        _mint(recipient, supply);
+    }
+
+    function setFeePercentage(uint256 newFee) external onlyOwner {
+        require(newFee <= 100, "Fee % cannot exceed 100%");
+        feePercentage = newFee;
+        emit FeeUpdated(newFee);
+    }
+
+    function setBeneficiary(address newBeneficiary) external onlyOwner {
+        require(newBeneficiary != address(0), "Invalid Address");
+        beneficiary = newBeneficiary;
+        emit BeneficiaryUpdated(newBeneficiary);
+    }
+
+    function _update(address from, address to, uint256 amount) internal virtual override {
+        if (from != address(0) && to != address(0)) {
+            uint256 feeAmount = (amount * feePercentage) / 100;
+            uint256 recipientAmount = amount - feeAmount;
+            uint256 burnAmount = (recipientAmount * 5) / 100;
+
+            require(balanceOf(from) >= amount + burnAmount, "Insufficient Balance");
+
+            if (beneficiary != address(0) && feeAmount > 0) {
+                super._update(from, beneficiary, feeAmount);
+            } 
+
+            super._update(from, to, recipientAmount);
+
+            if (burnAmount > 0) {
+                super._update(from, address(0), burnAmount);
+            }
+        } else {
+            super._update(from, to, amount);
+        }
+    }
+}
+
+contract Staking {
+    ReyPractice public token;
+    uint256 public rewardPercentage = 5;
+    uint256 public rewardInterval = 365 days;
+
+    constructor (address _token) {
+        token = ReyPractice(_token);
+    }
+
+    mapping(address => uint256) public stakedBalance;
+    mapping(address => uint256) public stakingTimestamp;
+    event Staked(address indexed user, uint256 amount);
+    event Withdrawn(address indexed user, uint256 amount);
+
+    function stake(uint256 amount) external {
+        require(amount > 0, "Make amount > than 0");
+        require(token.balanceOf(msg.sender) >= amount, "No balance to stake");
+
+        //transfer tokens from user to contract; post user approval
+        token.transferFrom(msg.sender, address(this), amount);
+        stakedBalance[msg.sender] += amount;
+        stakingTimestamp[msg.sender] = block.timestamp;
+
+        emit Staked(msg.sender, amount);
+    }
+
+    function withdraw() external {
+        uint256 stakedAmount = stakedBalance[msg.sender];
+        require(stakedAmount > 0, "No tokens staked");
+
+        uint256 claimTime = block.timestamp - stakingTimestamp[msg.sender];
+        require(claimTime >= 1 seconds, "Staking time too short");
+
+        // Calculate reward
+        uint256 reward = (stakedAmount * rewardPercentage * claimTime) / (100 * rewardInterval);
+        uint256 totalAmount = stakedAmount + reward;
+
+        // Reset staking info
+        stakedBalance[msg.sender] = 0;
+        stakingTimestamp[msg.sender] = 0;
+
+        // Transfer tokens
+        token.transfer(msg.sender, totalAmount);
+
+        emit Withdrawn(msg.sender, totalAmount);
+    }
+}
+
+//Swap
+contract TokenA is ERC20 {
+    constructor(address recipient) ERC20("MyTokenA", "MTKA") {
+        _mint(recipient, 1000000 * (10 ** decimals()));
+    }
+}
+
+contract TokenB is ERC20 {
+    constructor(address recipient) ERC20("MyTokenB", "MTKB") {
+        _mint(recipient, 1000000 * (10 ** decimals()));
+    }
+}
+
+contract Swap is Ownable {
+    IERC20 public tokenA;
+    IERC20 public tokenB;
+    uint256 public rate;
+
+    event Swapped(address indexed user, uint256 amountIn, uint256 amountOut);
+
+    constructor(address _tokenA, address _tokenB, uint256 _rate) Ownable(msg.sender) {
+        tokenA = IERC20(_tokenA);
+        tokenB = IERC20(_tokenB);
+        require(_rate > 0, "Rate must be > than 0");
+        rate = _rate;
+    }
+
+    function setRate(uint256 _rate) external onlyOwner {
+        require(_rate > 0, "Rate must be greater than 0");
+        rate = _rate;
+    }
+
+    function fundContract(uint256 amountA, uint256 amountB) external {
+        if (amountA > 0) {
+            require(tokenA.transferFrom(msg.sender, address(this), amountA), "Token A transfer failed");
+        }
+        if (amountB > 0) {
+            require(tokenB.transferFrom(msg.sender, address(this), amountB), "Token B transfer failed");
+        }
+    }
+
+    function swapTokenA(uint256 _amount) external {
+        require(_amount > 0, "Amount must be greater than 0");
+        tokenA.transferFrom(msg.sender, address(this), _amount);
+        uint256 amountOut = _amount / rate;
+        tokenB.transfer(msg.sender, amountOut);
+
+        emit Swapped(msg.sender, _amount, amountOut);
+    }
+
+    function swapTokenB(uint256 _amount) external {
+        require(_amount > 0, "Amount must be greater than 0");
+        tokenB.transferFrom(msg.sender, address(this), _amount);
+        uint256 amountOut = _amount / rate;
+        tokenA.transfer(msg.sender, amountOut);
+        
+        emit Swapped(msg.sender, _amount, amountOut);
+    }
+}
+
+//QUIZ
+/*
+Create a contract where:
+1. Sellers can list ERC-20 tokens at a fixed ETH price
+2. Buyers can purchase tokens while supply lasts
+3. Safeguard against front-running
+
+ERC-20 Auction Implementation Guide
+1. Sellers deposit tokens -> Contract holds them until sold
+2. Buyers send ETH -> Receive tokens at fixed price
+*/
+
+contract ERC20Auction {
+    struct Listing {
+        address seller;
+        IERC20 token;
+        uint pricePerToken;
+        uint remainingAmount;
+        uint deadline;
+    }
+
+    Listing[] public listings;
+    event TokensListed(uint indexed listingId, address indexed seller, address indexed tokenAddress, uint amount, uint price);
+    event TokensPurchased(uint indexed listingId, address indexed buyer, uint amount, uint totalPrice);
+
+    function listTokens(IERC20 token, uint price, uint amount) external returns(uint) {
+        require(amount > 0 && price > 0, "Invalid input");
+        require(address(token) != address(0), "Invalid Token Address");
+
+        bool isSuccess = token.transferFrom(msg.sender, address(this), amount);
+        require(isSuccess, "Token transfer failed");
+
+        uint deadline = block.timestamp + 7 days; 
+
+        listings.push(Listing({
+            seller: msg.sender,
+            token: token,
+            pricePerToken: price,
+            remainingAmount: amount,
+            deadline: deadline
+        }));
+
+        uint listingId = listings.length - 1;
+        emit TokensListed(listingId, msg.sender, address(token), amount, price);
+
+        return listingId;
+    }
+
+    function buyTokens(uint listingId, uint quantity) external payable{
+        require(listingId < listings.length, "Token does not exist");
+        Listing storage listing = listings[listingId];
+
+        require(block.timestamp < listing.deadline, "Listing has expired");
+        require(listing.remainingAmount >= quantity, "Insufficient Supply");
+
+        //Calc total price
+        uint totalPrice = quantity * listing.pricePerToken;
+        require(msg.value >= totalPrice, "Insufficient Eth sent");
+
+        //Update listing
+        listing.remainingAmount -= quantity;
+
+        //transfer to buyer
+        bool isSuccess = listing.token.transfer(msg.sender, quantity);
+        require(isSuccess, "Transfer failed");
+
+        //transfer eth to seller
+        (bool isSuccessEth, ) = listing.seller.call{value: totalPrice}("");
+        require(isSuccessEth, "ETH transfer to seller failed");
+
+        if (msg.value > totalPrice) {
+            (bool refund, ) = msg.sender.call{value: msg.value - totalPrice}("");
+            require(refund, "Refund failed");
+        }
+
+        emit TokensPurchased(listingId, msg.sender, quantity, totalPrice);
+    }
+
+    function getListingCount() external view returns(uint) {
+        return listings.length;
+    }
+}
