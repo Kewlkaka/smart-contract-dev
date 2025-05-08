@@ -1,0 +1,152 @@
+Blockchain:
+
+NFTs:
+Non Fungible Token
+1 unit of an NFT cannot be divided into further parts.
+
+Standard: ERC-721:
+Owner: Owner of NFT
+Operator: Co-owner of NFT
+
+_mint(),
+
+_safemint(),
+
+SupportsInterface: 
+	- Compatibility check between NFT and marketplace you wish to list at.
+	- Not related to us
+balanceOf:
+	- how many nfts owner has
+name(), 
+
+symbol(),
+
+requireOwned:
+	-takes tokenId
+	-verifies owner belonging to tokenId
+
+tokenURI: 
+	-takes tokenId as input
+	-checks requiredOwned(tokenId)
+	-if true, _baseURI()
+	-if base URI exists then 
+
+setApprovalForAll:
+	- approving msgsender for all tokens
+
+isApprovedForAll:
+	- checks if someone is approved for all tokens
+
+isAuthorized:
+	- has someone is approved for all or specific token
+
+transferFrom:
+	- takes from, to, tokenId
+	- from and to can be different, as it can be operator spending on behalf
+
+approve:
+	-calls _approve with 3 params: to, tokenId, _msgSender
+
+
+
+Opensea:
+Marketplace for NFT buying and selling.
+Name of Owner
+Owned By
+Standard: ERC 721
+Top Offer: 3.27 ETH
+Collection Floor Price //launch price
+Last sale Price
+Traits of NFT e.g Background Color, Head, Eyes, Glasses etc.
+
+Pinata:
+Pinata stores crypto files.
+For instance it can store NFT's that are in the form of images and JSON file containing associated metadata
+
+
+In Pinata:
+Add NFT-Image
+Copy base url by clicking on image e.g "https://www.white-kraken.."
+Create JSON metadata file:
+{
+  "name": "NFT #1",
+  "description": "This is my first NFT ever!",
+  //add image name of file after base uri, .../NFT-Image.jpg
+  "image": "https://white-junior-krill-758.mypinata.cloud/ipfs/bafkreiag7bu4x3skjqfo3zka6v5vvlhg7ncpmja24eeivr7gjodwmn75hq/NFT-Image.jpg",
+}
+
+
+Visit wizard.openzeppelin.
+Add base uri: https://white-junior-krill-758.mypinata.cloud/ipfs/bafkreiag7bu4x3skjqfo3zka6v5vvlhg7ncpmja24eeivr7gjodwmn75hq
+Check the following:
+Mintable //to mint NFT's
+Auto Increment Id's
+URI Storage
+
+Copy Provided code into Remix:
+// SPDX-License-Identifier: MIT
+// Compatible with OpenZeppelin Contracts ^5.0.0
+pragma solidity ^0.8.26;
+
+import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import {ERC721URIStorage} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+
+contract MyToken is ERC721, ERC721URIStorage, Ownable {
+    uint256 private _nextTokenId;
+
+    constructor(address initialOwner)
+        ERC721("MyToken", "MTK")
+        Ownable(initialOwner)
+    {}
+
+    function _baseURI() internal pure override returns (string memory) {
+        return "https://white-junior-krill-758.mypinata.cloud/ipfs/bafkreiag7bu4x3skjqfo3zka6v5vvlhg7ncpmja24eeivr7gjodwmn75hq";
+    }
+
+    function safeMint(address to, string memory uri)
+        public
+        onlyOwner
+        returns (uint256)
+    {
+        uint256 tokenId = _nextTokenId++;
+        _safeMint(to, tokenId);
+        _setTokenURI(tokenId, uri);
+        return tokenId;
+    }
+
+    // The following functions are overrides required by Solidity.
+
+    function tokenURI(uint256 tokenId)
+        public
+        view
+        override(ERC721, ERC721URIStorage)
+        returns (string memory)
+    {
+        return super.tokenURI(tokenId);
+    }
+
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        override(ERC721, ERC721URIStorage)
+        returns (bool)
+    {
+        return super.supportsInterface(interfaceId);
+    }
+}
+
+Deploy with Acc Address
+Transact Safe Mint with:
+-Acc Add
+-Base URI + Image: https://white-junior-krill-758.mypinata.cloud/ipfs/bafkreiag7bu4x3skjqfo3zka6v5vvlhg7ncpmja24eeivr7gjodwmn75hq/NFT-Image.jpg
+
+Verify:
+Transact tokenURI with:
+0
+
+Should return: 
+0: string: https://white-junior-krill-758.mypinata.cloud/ipfs/bafkreiag7bu4x3skjqfo3zka6v5vvlhg7ncpmja24eeivr7gjodwmn75hqhttps://white-junior-krill-758.mypinata.cloud/ipfs/bafkreiag7bu4x3skjqfo3zka6v5vvlhg7ncpmja24eeivr7gjodwmn75hq/NFT-Image.jpg
+
+
+Hence, we have now connected the contract with the NFT successfully minting NFT.
